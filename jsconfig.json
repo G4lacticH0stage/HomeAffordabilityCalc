@@ -1,0 +1,9 @@
+{
+    "compilerOptions": {
+      "baseUrl": "src",
+      "paths": {
+        "*": ["*"]
+      }
+    },
+    "include": ["src", "src/App.js", "tax-calculator/tax-calculator/src/App.test.js", "tax-calculator/tax-calculator/src/utils", "src/data", "src/components"]
+  }

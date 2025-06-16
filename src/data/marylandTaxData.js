@@ -1,0 +1,27 @@
+// Maryland County Tax Rates
+export const MARYLAND_COUNTIES = {
+    "Allegany": { type: "percentage", value: 0.0303 },
+    "Anne Arundel": { type: "percentage", value: 0.0270 },
+    "Baltimore City": { type: "percentage", value: 0.0320 },
+    "Baltimore County": { type: "percentage", value: 0.0320 },
+    "Calvert": { type: "percentage", value: 0.0300 },
+    "Caroline": { type: "percentage", value: 0.0320 },
+    "Carroll": { type: "percentage", value: 0.0303 },
+    "Cecil": { type: "percentage", value: 0.0275 },
+    "Charles": { type: "percentage", value: 0.0303 },
+    "Dorchester": { type: "percentage", value: 0.0320 },
+    "Frederick": { type: "percentage", value: 0.0296 },
+    "Garrett": { type: "percentage", value: 0.0265 },
+    "Harford": { type: "percentage", value: 0.0306 },
+    "Howard": { type: "percentage", value: 0.0320 },
+    "Kent": { type: "percentage", value: 0.0320 },
+    "Montgomery": { type: "percentage", value: 0.0320 },
+    "Prince George's": { type: "percentage", value: 0.0320 },
+    "Queen Anne's": { type: "percentage", value: 0.0320 },
+    "St. Mary's": { type: "percentage", value: 0.0300 },
+    "Somerset": { type: "percentage", value: 0.0320 },
+    "Talbot": { type: "percentage", value: 0.0240 },
+    "Washington": { type: "percentage", value: 0.0295 },
+    "Wicomico": { type: "percentage", value: 0.0320 },
+    "Worcester": { type: "percentage", value: 0.0225 }
+  };
