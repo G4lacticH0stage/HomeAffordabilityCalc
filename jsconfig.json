@@ -5,5 +5,5 @@
         "*": ["*"]
       }
     },
-    "include": ["src", "src/App.js", "tax-calculator/tax-calculator/src/App.test.js", "tax-calculator/tax-calculator/src/utils", "src/data", "src/components"]
+    "include": ["src", "src/App.js", "src/App.test.js", "tax-calculator/tax-calculator/src/utils", "src/data", "src/components"]
   }

@@ -935,7 +935,7 @@ const HomeAffordabilityCalculator = () => {
       
       // Add MIP for FHA loans
       if (housingData.enableFHA) {
-        monthlyMIP = (homePrice * 0.0085) / 12;
+        monthlyMIP = (homePrice * 0.015) / 12;
         totalMonthlyPayment += monthlyMIP;
       }
       
