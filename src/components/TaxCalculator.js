@@ -13,6 +13,10 @@ import { WEST_VIRGINIA_TAX } from '../data/westVirginiaTaxData';
 import { STATE_TAX_DATA } from '../data/tax-data';
 import { PROPERTY_TAX_RATES } from '../data/propertyTaxRates';
 
+// Constants for closing costs and MIP
+const CLOSING_COST_RATE = 0.05; // 5% of home price (typical range 2-5%)
+const UPFRONT_MIP_RATE = 0.0175; // 1.75% for FHA loans
+
 // Utility functions
 const calculateMonthlyMortgage = (homePrice, downPayment, interestRate, loanTermYears) => {
   // Calculate loan amount
@@ -246,7 +250,7 @@ const getTaxRateValue = (taxData) => {
   return 0;
 };
 
-// NEW: Get property tax rate based on state and county
+// Get property tax rate based on state and county
 const getPropertyTaxRate = (state, county) => {
   if (!state || !county || !PROPERTY_TAX_RATES[state]) {
     return null;
@@ -275,7 +279,7 @@ const getPropertyTaxRate = (state, county) => {
   return null;
 };
 
-// NEW: Get all counties for a state (combined from property tax data and income tax data)
+// Get all counties for a state (combined from property tax data and income tax data)
 const getAllCountiesForState = (state) => {
   const counties = new Set();
   
@@ -321,7 +325,7 @@ const getAllCountiesForState = (state) => {
   return Array.from(counties).sort();
 };
 
-// Calculate local tax (city or county) - UPDATED to use STATE_TAX_DATA properly
+// Calculate local tax (city or county)
 const calculateLocalTax = (income, state, county) => {
   if (!state || !county) {
     return 0;
@@ -399,7 +403,7 @@ const calculateStateTax = (income, state) => {
   return income * STATE_TAX_RATES[state];
 };
 
-// Calculate total tax burden - UPDATED to properly include local taxes
+// Calculate total tax burden
 const calculateTotalTax = (income, state, county) => {
   const federalTax = calculateFederalTax(income);
   const ficaTaxes = calculateFICATax(income);
@@ -439,12 +443,12 @@ const HomeAffordabilityCalculator = () => {
     income: '',
     payType: 'annual',
     state: '',
-    county: '', // CHANGED: from 'city' to 'county'
+    county: '',
     useCustomTakeHome: false,
     monthlyTakeHome: ''
   });
 
-  // Housing state - REMOVED property tax toggles, always calculated now
+  // Housing state
   const [housingData, setHousingData] = useState({
     homePrice: '',
     downPaymentType: 'percent',
@@ -469,7 +473,7 @@ const HomeAffordabilityCalculator = () => {
   const [showDetailedResults, setShowDetailedResults] = useState(false);
   const [showAdvancedOptions, setShowAdvancedOptions] = useState(false);
   const [paymentsByTerm, setPaymentsByTerm] = useState(null);
-  const [propertyTaxInfo, setPropertyTaxInfo] = useState(null); // NEW: Track property tax rate info
+  const [propertyTaxInfo, setPropertyTaxInfo] = useState(null);
 
   // Set interest rate based on loan term
   useEffect(() => {
@@ -518,7 +522,7 @@ const HomeAffordabilityCalculator = () => {
     }
   }, [housingData.downPaymentAmount, housingData.homePrice, housingData.downPaymentType]);
 
-  // NEW: Update property tax info when state/county changes
+  // Update property tax info when state/county changes
   useEffect(() => {
     if (incomeData.state && incomeData.county) {
       const propTaxInfo = getPropertyTaxRate(incomeData.state, incomeData.county);
@@ -563,7 +567,7 @@ const HomeAffordabilityCalculator = () => {
     }));
   };
 
-  // UPDATED: Validate the input form - always require county
+  // Validate the input form
   const validateForm = () => {
     const newErrors = {};
 
@@ -579,7 +583,7 @@ const HomeAffordabilityCalculator = () => {
         newErrors.state = 'State selection is required';
       }
       
-      // UPDATED: Always require county selection
+      // Always require county selection
       if (!incomeData.county) {
         newErrors.county = 'County selection is required for property tax calculation';
       }
@@ -591,7 +595,11 @@ const HomeAffordabilityCalculator = () => {
         newErrors.monthlyTakeHome = 'Please enter a valid monthly take-home amount';
       }
       
-      // UPDATED: Always require county even for custom take-home (for property tax)
+      // Always require county even for custom take-home (for property tax)
+      if (!incomeData.state) {
+        newErrors.state = 'State selection is required for property tax calculation';
+      }
+      
       if (!incomeData.county) {
         newErrors.county = 'County selection is required for property tax calculation';
       }
@@ -630,7 +638,7 @@ const HomeAffordabilityCalculator = () => {
     return Object.keys(newErrors).length === 0;
   };
 
-  // UPDATED: Calculate affordability with proper property tax integration
+  // Calculate affordability with proper property tax integration and closing costs
   const calculateAffordability = () => {
     if (!validateForm()) return;
 
@@ -651,8 +659,8 @@ const HomeAffordabilityCalculator = () => {
       } else {
         // Use custom take-home pay
         monthlyTakeHome = parseFloat(incomeData.monthlyTakeHome);
-        // Estimate gross income based on take-home pay
-        monthlyGrossIncome = monthlyTakeHome * 1.3;
+        // Estimate gross income based on take-home pay (assuming ~30% tax rate)
+        monthlyGrossIncome = monthlyTakeHome / 0.7;
         annualIncome = monthlyGrossIncome * 12;
       }
 
@@ -697,7 +705,7 @@ const HomeAffordabilityCalculator = () => {
       
       // Add MIP if FHA loan is enabled
       if (housingData.enableFHA) {
-        const monthlyMIP = (estimatedHomePrice * 0.0085) / 12;
+        const monthlyMIP = (estimatedHomePrice * 0.0055) / 12;
         additionalHousingCosts += monthlyMIP;
       }
       
@@ -711,12 +719,14 @@ const HomeAffordabilityCalculator = () => {
         return;
       }
       
-      // Calculate max home price based on the down payment situation
+      // Calculate max home price based on the down payment situation with closing costs
       let maxHomePrice, maxLoanAmount;
       
       if (housingData.downPaymentType === 'percent') {
-        // Percentage-based down payment
-        maxHomePrice = calculateMaxHomePrice(
+        downPaymentPercent = parseFloat(housingData.downPaymentPercent);
+        
+        // Calculate iteratively to account for closing costs
+        let estimatedHomePrice = calculateMaxHomePrice(
           monthlyGrossIncome,
           interestRate,
           loanTermYears,
@@ -724,7 +734,40 @@ const HomeAffordabilityCalculator = () => {
           monthlyDebts
         );
         
-        // Now apply the down payment percentage
+        // Iterate to find true max price accounting for closing costs
+        for (let i = 0; i < 10; i++) {
+          const downPayment = estimatedHomePrice * (downPaymentPercent / 100);
+          const loanAmount = estimatedHomePrice - downPayment;
+          
+          // Calculate closing costs
+          let closingCosts = estimatedHomePrice * CLOSING_COST_RATE;
+          
+          // Add upfront MIP for FHA loans
+          if (housingData.enableFHA) {
+            closingCosts += loanAmount * UPFRONT_MIP_RATE;
+          }
+          
+          // Total cash needed
+          const totalCashNeeded = downPayment + closingCosts;
+          
+          // Recalculate max home price considering cash requirements
+          const adjustedMaxPrice = calculateMaxHomePrice(
+            monthlyGrossIncome,
+            interestRate,
+            loanTermYears,
+            totalCashNeeded,
+            monthlyDebts
+          );
+          
+          // If the difference is small, we've converged
+          if (Math.abs(estimatedHomePrice - adjustedMaxPrice) < 100) {
+            maxHomePrice = adjustedMaxPrice;
+            break;
+          }
+          
+          estimatedHomePrice = adjustedMaxPrice;
+        }
+        
         downPaymentAmount = maxHomePrice * (downPaymentPercent / 100);
         maxLoanAmount = maxHomePrice - downPaymentAmount;
       } else {
@@ -775,9 +818,20 @@ const HomeAffordabilityCalculator = () => {
       
       // Add MIP for FHA loans
       if (housingData.enableFHA) {
-        monthlyMIP = (maxHomePrice * 0.0085) / 12;
+        monthlyMIP = (maxHomePrice * 0.0055) / 12;
         totalMonthlyPayment += monthlyMIP;
       }
+      
+      // Calculate closing costs for display
+      const finalClosingCosts = maxHomePrice * CLOSING_COST_RATE;
+      let finalUpfrontMIP = 0;
+      
+      if (housingData.enableFHA) {
+        finalUpfrontMIP = maxLoanAmount * UPFRONT_MIP_RATE;
+      }
+      
+      const totalClosingCosts = finalClosingCosts + finalUpfrontMIP;
+      const totalCashNeeded = downPaymentAmount + totalClosingCosts;
       
       // Calculate payment options for different terms
       const termOptions = [10, 15, 30];
@@ -847,7 +901,11 @@ const HomeAffordabilityCalculator = () => {
         taxResults: taxResults,
         enableFHA: housingData.enableFHA,
         propertyTaxRate: propertyTaxRate,
-        propertyTaxInfo: propTaxInfo
+        propertyTaxInfo: propTaxInfo,
+        closingCosts: finalClosingCosts,
+        upfrontMIP: finalUpfrontMIP,
+        totalClosingCosts: totalClosingCosts,
+        totalCashNeeded: totalCashNeeded
       });
       
       setPaymentsByTerm(paymentOptions);
@@ -858,7 +916,7 @@ const HomeAffordabilityCalculator = () => {
     }
   };
   
-  // UPDATED: Calculate affordability for a specific home price with proper property tax integration
+  // Calculate affordability for a specific home price with proper property tax integration
   const analyzeMortgage = () => {
     if (!validateForm()) return;
     
@@ -877,7 +935,8 @@ const HomeAffordabilityCalculator = () => {
         monthlyTakeHome = takeHomePay / 12;
       } else {
         monthlyTakeHome = parseFloat(incomeData.monthlyTakeHome);
-        monthlyGrossIncome = monthlyTakeHome * 1.3;
+        // Estimate gross income based on take-home pay (assuming ~30% tax rate)
+        monthlyGrossIncome = monthlyTakeHome / 0.7;
         annualIncome = monthlyGrossIncome * 12;
       }
       
@@ -935,9 +994,20 @@ const HomeAffordabilityCalculator = () => {
       
       // Add MIP for FHA loans
       if (housingData.enableFHA) {
-        monthlyMIP = (homePrice * 0.015) / 12;
+        monthlyMIP = (homePrice * 0.0055) / 12;
         totalMonthlyPayment += monthlyMIP;
       }
+      
+      // Calculate closing costs
+      const closingCosts = homePrice * CLOSING_COST_RATE;
+      let upfrontMIP = 0;
+      
+      if (housingData.enableFHA) {
+        upfrontMIP = loanAmount * UPFRONT_MIP_RATE;
+      }
+      
+      const totalClosingCosts = closingCosts + upfrontMIP;
+      const totalCashNeeded = downPaymentAmount + totalClosingCosts;
       
       // Calculate percentage of gross income
       const percentOfGrossIncome = (totalMonthlyPayment / monthlyGrossIncome) * 100;
@@ -1019,7 +1089,11 @@ const HomeAffordabilityCalculator = () => {
         taxResults: taxResults,
         enableFHA: housingData.enableFHA,
         propertyTaxRate: propertyTaxRate,
-        propertyTaxInfo: propTaxInfo
+        propertyTaxInfo: propTaxInfo,
+        closingCosts: closingCosts,
+        upfrontMIP: upfrontMIP,
+        totalClosingCosts: totalClosingCosts,
+        totalCashNeeded: totalCashNeeded
       });
       
       setPaymentsByTerm(paymentOptions);
@@ -1101,7 +1175,6 @@ const HomeAffordabilityCalculator = () => {
                 <select
                   value={incomeData.state}
                   onChange={(e) => handleIncomeChange('state', e.target.value)}
-                  disabled={incomeData.useCustomTakeHome}
                   className={errors.state ? 'error' : ''}
                 >
                   <option value="">Select State</option>
@@ -1112,7 +1185,7 @@ const HomeAffordabilityCalculator = () => {
                 {errors.state && <div className="error-message">{errors.state}</div>}
               </div>
               
-              {/* UPDATED: Always show county when state is selected */}
+              {/* Always show county when state is selected */}
               {incomeData.state && (
                 <div className="input-group">
                   <label>County</label>
@@ -1132,7 +1205,7 @@ const HomeAffordabilityCalculator = () => {
               )}
             </div>
             
-            {/* NEW: Show property tax rate info when available */}
+            {/* Show property tax rate info when available */}
             {propertyTaxInfo && (
               <div className="property-tax-info">
                 <small>
@@ -1266,11 +1339,11 @@ const HomeAffordabilityCalculator = () => {
                   checked={housingData.enableFHA}
                   onChange={(e) => handleHousingChange('enableFHA', e.target.checked)}
                 />
-                FHA Loan (3.5% down payment + MIP)
+                FHA Loan (5% down payment + upfront MIP charge of 1.75% of the loan amount)
               </label>
             </div>
             
-            {/* UPDATED: Simplified advanced options - removed property tax toggles */}
+            {/* Simplified advanced options */}
             <div className="toggle-section">
               <button
                 type="button"
@@ -1435,7 +1508,30 @@ const HomeAffordabilityCalculator = () => {
                 )}
               </div>
 
-              {/* Monthly Payment Breakdown - UPDATED to always show property tax */}
+              {/* Cash Requirements Summary */}
+              <div className="cash-requirements">
+                <h3>Cash Requirements</h3>
+                <div className="result-item">
+                  <span>Down Payment ({results.downPaymentPercent.toFixed(1)}%):</span>
+                  <span>{formatCurrency(results.downPaymentAmount)}</span>
+                </div>
+                <div className="result-item">
+                  <span>Closing Costs ({(CLOSING_COST_RATE * 100).toFixed(1)}%):</span>
+                  <span>{formatCurrency(results.closingCosts)}</span>
+                </div>
+                {results.enableFHA && results.upfrontMIP > 0 && (
+                  <div className="result-item">
+                    <span>Upfront MIP (1.75%):</span>
+                    <span>{formatCurrency(results.upfrontMIP)}</span>
+                  </div>
+                )}
+                <div className="result-item total">
+                  <span>Total Cash Needed:</span>
+                  <span className="highlight">{formatCurrency(results.totalCashNeeded)}</span>
+                </div>
+              </div>
+
+              {/* Monthly Payment Breakdown */}
               <div className="payment-breakdown">
                 <h3>Monthly Payment Breakdown</h3>
 
@@ -1447,7 +1543,7 @@ const HomeAffordabilityCalculator = () => {
                     </span>
                   </div>
 
-                  {/* UPDATED: Property tax always shown now */}
+                  {/* Property tax always shown now */}
                   <div className="result-item">
                     <span>Property Tax:</span>
                     <span>
@@ -1455,7 +1551,7 @@ const HomeAffordabilityCalculator = () => {
                     </span>
                   </div>
                   
-                  {/* UPDATED: Show property tax rate info */}
+                  {/* Show property tax rate info */}
                   {results.propertyTaxInfo && (
                     <div className="property-tax-detail">
                       <small>Property tax rate: {(results.propertyTaxRate * 100).toFixed(2)}% ({results.propertyTaxInfo.source})</small>
@@ -1544,7 +1640,7 @@ const HomeAffordabilityCalculator = () => {
                       </div>
                     )}
 
-                    {/* Tax breakdown - UPDATED to show local taxes when applicable */}
+                    {/* Tax breakdown */}
                     <div className="tax-breakdown">
                       <h3>Tax Breakdown</h3>
                       <div className="result-item">
@@ -1593,6 +1689,9 @@ const HomeAffordabilityCalculator = () => {
                 
                 <h4>Property Tax Integration</h4>
                 <p>Property taxes are automatically calculated based on your selected county and are always included in your monthly payment estimate for accurate affordability calculations.</p>
+                
+                <h4>Closing Costs & Cash Requirements</h4>
+                <p>The calculator accounts for closing costs (5% of home price) and upfront MIP for FHA loans when determining your maximum affordable home price and total cash needed.</p>
               </div>
             </div>
           )}
